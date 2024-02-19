@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors"); // Import du package cors
 var routers = require('./routes/routes');
 const bodyParser = require("body-parser");
 
@@ -22,4 +23,5 @@ connection.once("open", () => {
 });
 
 app.use(bodyParser.json());
+app.use(cors());
 app.use(routers);
