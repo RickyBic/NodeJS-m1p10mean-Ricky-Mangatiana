@@ -12,7 +12,8 @@ var utilisateurSchema = new Schema({
         servicePrefere: { type: mongoose.Schema.Types.ObjectId, ref: 'service' },
         employePrefere: { type: mongoose.Schema.Types.ObjectId, ref: 'utilisateur' }
     },
-    horairestravail: [{ type: mongoose.Schema.Types.ObjectId, ref: 'horairetravail' }] // Pour les employés
+    horairestravail: [{ type: mongoose.Schema.Types.ObjectId, ref: 'horairetravail' }], // Pour les employés
+    services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'service' }], // Pour les employés
     // ... d'autres champs pour les notifications, rappels, etc.
 });
 
