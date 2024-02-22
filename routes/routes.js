@@ -6,29 +6,6 @@ var serviceModel = require('../src/model/service');
 var horairetravailModel = require('../src/model/horairetravail');
 var rendezvousModel = require('../src/model/rendezVous');
 
-/*----------Gestion-du-personnel----------*/
-router.post('/utilisateur', async (req, res) => {
-    const utilisateur = new utilisateurModel(req.body);
-    try {
-        await utilisateur.save();
-        res.status(201).send({
-            "status": true,
-            "message": "Utilisateur ajouté"
-        });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.get('/utilisateurs', async (req, res) => {
-    try {
-        const utilisateurs = await utilisateurModel.find();
-        res.status(200).send(utilisateurs);
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
 /*----------Login de l'utilisateur----------*/
 router.post('/login', async (req, res) => {
     const { email, motDePasse } = req.body;
@@ -43,6 +20,7 @@ router.post('/login', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
 
 /*----------Inscription d'un client----------*/
 router.post('/nouveauClient', async (req, res) => {
@@ -61,6 +39,7 @@ router.post('/nouveauClient', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
 
 /*----------Gestion du personnel----------*/
 router.post('/nouveauEmploye', async (req, res) => {
@@ -89,97 +68,8 @@ router.get('/listeEmploye', async (req, res) => {
     }
 });
 
-router.get('/utilisateurs/employes', async (req, res) => {
-    try {
-        const utilisateurs = await utilisateurModel.find({
-            "profil": 1 // [1] Employé
-        });
-        res.status(200).send(utilisateurs);
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
 
-router.get('/utilisateurs/:_id', async (req, res) => {
-    try {
-        const _id = req.params._id;
-        const utilisateur = await utilisateurModel.findById(_id);
-        return !utilisateur ? res.status(404).send() : res.status(200).send(utilisateur);
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.put('/utilisateurs/:_id', async (req, res) => {
-    try {
-        const _id = req.params._id;
-        const body = req.body;
-        const utilisateur = await utilisateurModel.findByIdAndUpdate(_id, body, { new: true });
-        return !utilisateur ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Utilisateur modifié" });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.delete('/utilisateurs/:_id', async (req, res) => {
-    try {
-        const _id = req.params._id;
-        const utilisateur = await utilisateurModel.findByIdAndDelete(_id);
-        return !utilisateur ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Utilisateur supprimé" });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-/*----------Gestion-du-personnel----------*/
-
-
-/*----------Gestion-des-horaires-de-travail----------*/
-router.post('/horairetravail', async (req, res) => {
-    const horairetravail = new horairetravailModel(req.body);
-    try {
-        await horairetravail.save();
-        res.status(201).send({
-            "status": true,
-            "message": "Horaire de travail ajouté"
-        });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.get('/horairestravail', async (req, res) => {
-    try {
-        const horairestravail = await horairetravailModel.find({});
-        res.status(200).send(horairestravail);
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.put('/horairestravail/:_id', async (req, res) => {
-    try {
-        const _id = req.params._id;
-        const body = req.body;
-        const horairetravail = await horairetravailModel.findByIdAndUpdate(_id, body, { new: true });
-        return !horairetravail ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Horaire de travail modifié" });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-router.delete('/horairestravail/:_id', async (req, res) => {
-    try {
-        const _id = req.params._id;
-        const horairetravail = await horairetravailModel.findByIdAndDelete(_id);
-        return !horairetravail ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Horaire de travail supprimé" });
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-/*----------Gestion-des-horaires-de-travail----------*/
-
-
-/*----------Gestion-des-services----------*/
+/*----------Gestion-des-services [BASE]----------*/
 router.post('/service', async (req, res) => {
     const service = new serviceModel(req.body);
     try {
@@ -232,7 +122,7 @@ router.delete('/services/:_id', async (req, res) => {
         res.status(500).send(error);
     }
 });
-/*----------Gestion-des-services----------*/
+/*----------Gestion-des-services [BASE]----------*/
 
 
 /*----------Prise-de-rendez-vous----------*/
@@ -344,9 +234,9 @@ router.get('/rendezvous', async (req, res) => {
 router.get('/rendezvous/employe/:employeId', async (req, res) => {
     try {
         const rendezvousListparEmploye = await rendezvousModel.find({ employe: req.params.employeId })
-                                                .populate('client')
-                                                .populate('service')
-                                                .exec();
+            .populate('client')
+            .populate('service')
+            .exec();
         res.status(200).json(rendezvousListparEmploye);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -356,9 +246,9 @@ router.get('/rendezvous/employe/:employeId', async (req, res) => {
 router.get('/rendezvous/client/:clientId', async (req, res) => {
     try {
         const rendezvousListparClient = await rendezvousModel.find({ client: req.params.clientId })
-                                                .populate('employe')
-                                                .populate('service')
-                                                .exec();
+            .populate('employe')
+            .populate('service')
+            .exec();
         res.status(200).json(rendezvousListparClient);
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -386,7 +276,7 @@ router.put('/utilisateur/:userId/horairetravail/:horaireId', async (req, res) =>
 
         // Effectuez la mise à jour de l'horaire de travail
         await horaireTravailModel.findByIdAndUpdate(horaireId, nouvelHoraire);
-        
+
         res.status(200).json({ message: "Horaire de travail mis à jour avec succès" });
     } catch (error) {
         res.status(500).json({ message: error.message });

@@ -7,7 +7,7 @@ var rendezvousSchema = new Schema({
     client: { type: mongoose.Schema.Types.ObjectId, ref: 'utilisateur' },
     service: { type: mongoose.Schema.Types.ObjectId, ref: 'service' },
     employe: { type: mongoose.Schema.Types.ObjectId, ref: 'utilisateur' },
-    etat: { type: Number, default: 0 }
+    etat: { type: Number, default: 0 } // [0] Non effectué >> [1] Effectué >> [2] Annulé
     // ... d'autres champs pour la gestion du rendez-vous
 });
 
