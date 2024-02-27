@@ -5,6 +5,7 @@ var utilisateurModel = require('../src/model/utilisateur');
 var serviceModel = require('../src/model/service');
 var horairetravailModel = require('../src/model/horairetravail');
 var rendezvousModel = require('../src/model/rendezVous');
+var depenseModel = require('../src/model/depense');
 const nodemailer = require('nodemailer');
 
 /*----------Login de l'utilisateur----------*/
@@ -12,7 +13,11 @@ router.post('/login', async (req, res) => {
     const { email, motDePasse } = req.body;
     console.log(req.body);
     try {
-        const utilisateur = await utilisateurModel.findOne({ email, motDePasse }).populate('horairestravail');
+        const utilisateur = await utilisateurModel.findOne({ email, motDePasse })
+            .populate('preferences.servicePrefere')
+            .populate('preferences.employePrefere')
+            .populate('horairestravail')
+            .populate('services');
         if (!utilisateur) {
             return res.status(401).send({ message: 'Email ou mot de passe incorrect' });
         }
@@ -373,5 +378,158 @@ router.post('/envoyer-email', (req, res) => {
         }
     });
 });
+
+
+/*----------Tâches-effectuées-et-montant-de-commission-pour-la-journée----------*/
+router.get('/taches/:employeId', async (req, res) => {
+    try {
+        const desiredDate = new Date();
+        desiredDate.setHours(0, 0, 0, 0);
+        const nextDay = new Date(desiredDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        nextDay.setHours(0, 0, 0, 0);
+        const taches = await rendezvousModel.find({ // [rendezvous] Tâches effectuées par l'employé 
+            "employe": req.params.employeId,
+            "date": {
+                $gte: desiredDate,
+                $lt: nextDay
+            },
+            "etat": 1
+        }).populate('service').populate('client');
+        let commission = 0;
+        let pourcentage = 0;
+        for (const tache of taches) {
+            commission += tache.service.prix * tache.service.commission;
+            pourcentage += tache.service.commission;
+        }
+        res.status(200).send({
+            "status": true,
+            "taches": taches,
+            "commission": commission,
+            "pourcentage": pourcentage
+        });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Tâches-effectuées-et-montant-de-commission-pour-la-journée----------*/
+
+
+/*----------Gestion-des-préférences----------*/
+router.put('/preferences/:clientId', async (req, res) => {
+    try {
+        const clientId = req.params.clientId;
+        const body = req.body;
+        const service = await utilisateurModel.findByIdAndUpdate(clientId, body, { new: true });
+        return !service ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Préférences modifiées" });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Gestion-des-préférences----------*/
+
+
+/*----------Statistiques----------*/
+router.post('/statistiques', async (req, res) => {
+    try {
+        const dateDebut = new Date(req.body.dateDebut);
+        const dateFin = new Date(req.body.dateFin);
+        const rendezvous = await rendezvousModel.find({ date: { $gte: dateDebut, $lte: dateFin } }).populate('service');
+        const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calculer le nombre de jours dans la période
+        /*----------Temps-moyen-de-travail-pour-chaque-employé----------*/
+        const tempsMoyenDeTravail = [];
+        const employes = await utilisateurModel.find({ profil: 1 });
+        for (const employe of employes) {
+            let total = 0; // minutes
+            const rendezvous = await rendezvousModel.find({ date: { $gte: dateDebut, $lte: dateFin }, employe: employe._id }).populate('service');
+            for (const rdv of rendezvous) {
+                total += rdv.service.duree;
+            }
+            tempsMoyenDeTravail.push(
+                {
+                    "employe": employe,
+                    "moyenne": rendezvous.length > 0 ? total / rendezvous.length : 0,
+                }
+            );
+        }
+        /*----------Chiffre-d’affaires----------*/
+        let chiffreAffairesTotal = 0;
+        let commissionTotal = 0;
+        for (const rdv of rendezvous) {
+            chiffreAffairesTotal += rdv.service.prix;
+            commissionTotal += rdv.service.prix * rdv.service.commission;
+        }
+        let nombreDeMois = 0;
+        const chiffreAffairesParMois = {}; // Initialiser un objet pour stocker le chiffre d'affaires par mois [Pas nécessaire]
+        for (const rdv of rendezvous) {
+            const moisRdv = rdv.date.getMonth() + 1; // Les mois sont indexés à partir de 0, donc nous ajoutons 1
+            if (!chiffreAffairesParMois[moisRdv]) {
+                chiffreAffairesParMois[moisRdv] = 0;
+                nombreDeMois++; // [Nécessaire]
+            }
+            chiffreAffairesParMois[moisRdv] += rdv.service.prix; // Ajouter le chiffre d'affaires du service au mois correspondant
+        }
+        const chiffreAffaireJournalier = chiffreAffairesTotal / nombreDeJours; // Calculer le chiffre d'affaires moyen par jour
+        const chiffreAffaireMensuel = chiffreAffairesTotal / nombreDeMois; // Calculer le chiffre d'affaires moyen par mois
+        /*----------Le-nombre-de-réservation-----------*/
+        const nombreDeReservationJournalier = rendezvous.length / nombreDeJours; // Calculer le nombre de réservation moyen par jour
+        const nombreDeReservationMensuel = rendezvous.length / nombreDeMois; // Calculer le nombre de réservation moyen par mois
+        /*----------Bénéfice-par-mois----------*/
+        let depensesTotal = 0;
+        const depenses = await depenseModel.find({});
+        for (const depense of depenses) {
+            depensesTotal += depense.montant;
+        }
+        const beneficeMensuel = chiffreAffaireMensuel - (commissionTotal / nombreDeMois) - depensesTotal;
+        /*----------Envoi-des-données----------*/
+        res.status(200).send({
+            "status": true,
+            "tempsMoyenDeTravail": tempsMoyenDeTravail,
+            "nombreDeReservationJournalier": nombreDeReservationJournalier,
+            "nombreDeReservationMensuel": nombreDeReservationMensuel,
+            "chiffreAffaireJournalier": chiffreAffaireJournalier,
+            "chiffreAffaireMensuel": chiffreAffaireMensuel,
+            "beneficeMensuel": beneficeMensuel
+        });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Statistiques----------*/
+
+
+/*----------Gestion-des-dépenses----------*/
+router.post('/depense', async (req, res) => {
+    const depense = new depenseModel(req.body);
+    try {
+        await depense.save();
+        res.status(201).send({
+            "status": true,
+            "message": "Dépense ajouté"
+        });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/depenses', async (req, res) => {
+    try {
+        const depenses = await depenseModel.find({});
+        res.status(200).send(depenses);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.delete('/depense/:_id', async (req, res) => {
+    try {
+        const _id = req.params._id;
+        const depense = await depenseModel.findByIdAndDelete(_id);
+        return !depense ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Dépense supprimé" });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Gestion-des-dépenses----------*/
 
 module.exports = router;
