@@ -126,7 +126,7 @@ router.put('/modifyEmploye/:id', async (req, res) => {
         }
         if (nom) {
             utilisateur.nom = nom;
-        }    
+        }
         if (prenom) {
             utilisateur.prenom = prenom;
         }
@@ -151,25 +151,25 @@ router.put('/modifyEmploye/:id', async (req, res) => {
 
 /*----------Gestion-des-services [BASE]----------*/
 router.post('/service', async (req, res) => {
-    const { nom, prix, duree, commission, image } = req.body;  
+    const { nom, prix, duree, commission, image } = req.body;
     const service = new serviceModel({
-      nom,
-      prix,
-      duree,
-      commission,
-    //   image: image
-      image: Buffer.from(image, 'base64') 
-    });  
+        nom,
+        prix,
+        duree,
+        commission,
+        // image: image
+        image: Buffer.from(image, 'base64')
+    });
     try {
-      await service.save();
-      res.status(201).send({
-        "status": true,
-        "message": "Service ajouté",
-      });
+        await service.save();
+        res.status(201).send({
+            "status": true,
+            "message": "Service ajouté",
+        });
     } catch (error) {
-      res.status(500).send(error);
+        res.status(500).send(error);
     }
-  });
+});
 
 router.get('/services', async (req, res) => {
     try {
@@ -312,10 +312,10 @@ router.post('/paiement', async (req, res) => {
 router.get('/rendezvous', async (req, res) => {
     try {
         const rendezvousList = await rendezvousModel.find()
-        .populate('client')
-        .populate('service')
-        .populate('employe')
-        .exec();
+            .populate('client')
+            .populate('service')
+            .populate('employe')
+            .exec();
         res.status(200).send(rendezvousList);
     } catch (error) {
         res.status(500).send(error);
@@ -356,8 +356,8 @@ let transporter = nodemailer.createTransport({
         pass: 'kklf ybyr fptc ivna' //motdepasse genere depuis identifiant à deux facteurs dans gmail
     },
     tls: {
-      rejectUnauthorized: false // Ignorer les erreurs de certificat
-  }
+        rejectUnauthorized: false // Ignorer les erreurs de certificat
+    }
 });
 
 router.post('/envoyer-email', (req, res) => {
