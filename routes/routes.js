@@ -5,6 +5,7 @@ var utilisateurModel = require('../src/model/utilisateur');
 var serviceModel = require('../src/model/service');
 var horairetravailModel = require('../src/model/horairetravail');
 var rendezvousModel = require('../src/model/rendezVous');
+const nodemailer = require('nodemailer');
 
 /*----------Gestion-du-personnel----------*/
 router.post('/utilisateur', async (req, res) => {
@@ -34,7 +35,7 @@ router.post('/login', async (req, res) => {
     const { email, motDePasse } = req.body;
     console.log(req.body);
     try {
-        const utilisateur = await utilisateurModel.findOne({ email, motDePasse });
+        const utilisateur = await utilisateurModel.findOne({ email, motDePasse }).populate('horairestravail');
         if (!utilisateur) {
             return res.status(401).send({ message: 'Email ou mot de passe incorrect' });
         }
@@ -130,6 +131,37 @@ router.delete('/utilisateurs/:_id', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+router.put('/modifyEmploye/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nom, prenom, email, motDePasse, services } = req.body;
+    try {
+        const utilisateur = await utilisateurModel.findById(id);
+        if (!utilisateur) {
+            return res.status(404).json({ message: "Utilisateur non trouvé" });
+        }
+        if (nom) {
+            utilisateur.nom = nom;
+        }    
+        if (prenom) {
+            utilisateur.prenom = prenom;
+        }
+        if (email) {
+            utilisateur.email = email;
+        }
+        if (motDePasse) {
+            utilisateur.motDePasse = motDePasse;
+        }
+        if (services) {
+            utilisateur.services = services;
+        }
+        await utilisateur.save();
+        return res.status(200).json({ utilisateur });
+    } catch (error) {
+        console.error("Erreur lors de la modification de l'utilisateur :", error);
+        return res.status(500).json({ message: "Erreur serveur lors de la modification de l'utilisateur" });
+    }
+});
 /*----------Gestion-du-personnel----------*/
 
 
@@ -181,17 +213,25 @@ router.delete('/horairestravail/:_id', async (req, res) => {
 
 /*----------Gestion-des-services----------*/
 router.post('/service', async (req, res) => {
-    const service = new serviceModel(req.body);
+    const { nom, prix, duree, commission, image } = req.body;  
+    const service = new serviceModel({
+      nom,
+      prix,
+      duree,
+      commission,
+    //   image: image
+      image: Buffer.from(image, 'base64') 
+    });  
     try {
-        await service.save();
-        res.status(201).send({
-            "status": true,
-            "message": "Service ajouté"
-        });
+      await service.save();
+      res.status(201).send({
+        "status": true,
+        "message": "Service ajouté",
+      });
     } catch (error) {
-        res.status(500).send(error);
+      res.status(500).send(error);
     }
-});
+  });
 
 router.get('/services', async (req, res) => {
     try {
@@ -333,7 +373,11 @@ router.post('/paiement', async (req, res) => {
 /*----------Liste des rendez-vous----------*/
 router.get('/rendezvous', async (req, res) => {
     try {
-        const rendezvousList = await rendezvousModel.find();
+        const rendezvousList = await rendezvousModel.find()
+        .populate('client')
+        .populate('service')
+        .populate('employe')
+        .exec();
         res.status(200).send(rendezvousList);
     } catch (error) {
         res.status(500).send(error);
@@ -365,33 +409,36 @@ router.get('/rendezvous/client/:clientId', async (req, res) => {
     }
 });
 
-/*Horaire de travail*/
-router.put('/utilisateur/:userId/horairetravail/:horaireId', async (req, res) => {
-    try {
-        const userId = req.params.userId;
-        const horaireId = req.params.horaireId;
-        const nouvelHoraire = req.body; // Données de l'horaire de travail à mettre à jour
-
-        // Vérifiez si l'utilisateur existe
-        const utilisateur = await utilisateurModel.findById(userId);
-        if (!utilisateur) {
-            return res.status(404).json({ message: "Utilisateur non trouvé" });
-        }
-
-        // Vérifiez si l'horaire de travail existe
-        const horaireTravail = await horaireTravailModel.findById(horaireId);
-        if (!horaireTravail) {
-            return res.status(404).json({ message: "Horaire de travail non trouvé" });
-        }
-
-        // Effectuez la mise à jour de l'horaire de travail
-        await horaireTravailModel.findByIdAndUpdate(horaireId, nouvelHoraire);
-        
-        res.status(200).json({ message: "Horaire de travail mis à jour avec succès" });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
+//Send Mail
+// Configurer le transporteur (SMTP)
+let transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: '@gmail.com', //mailenvoyeur
+        pass: 'kklf ybyr fptc ivna' //motdepasse genere depuis identifiant à deux facteurs dans gmail
+    },
+    tls: {
+      rejectUnauthorized: false // Ignorer les erreurs de certificat
+  }
 });
 
+router.post('/envoyer-email', (req, res) => {
+    const { destinataire, sujet, contenu } = req.body;
+    let mailOptions = {
+        from: '@gmail.com', //mailenvoyeur
+        to: destinataire,
+        subject: sujet,
+        text: contenu
+    };
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            console.log('Erreur lors de l\'envoi du courriel:', error);
+            res.status(500).json({ message: 'Erreur lors de l\'envoi du courriel' });
+        } else {
+            console.log('Courriel envoyé avec succès:', info.response);
+            res.json({ message: 'Courriel envoyé avec succès' });
+        }
+    });
+});
 
 module.exports = router;
