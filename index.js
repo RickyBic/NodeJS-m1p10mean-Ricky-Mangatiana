@@ -1,6 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
-const cors = require("cors"); // Import du package cors
+const cors = require("cors");
 var routers = require('./routes/routes');
 const bodyParser = require("body-parser");
 
@@ -13,6 +13,9 @@ const mongodatabaseURL = "mongodb+srv://ramiakamananaricky:mongo@cluster0.kjxgbm
 mongoose.connect(mongodatabaseURL);
 
 const connection = mongoose.connection;
+
+app.use(bodyParser.json({ limit: '10mb', extended: true }));
+app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 app.listen(port, () => {
     console.log("Server is running on port " + port);
