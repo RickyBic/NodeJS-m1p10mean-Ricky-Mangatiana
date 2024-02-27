@@ -8,10 +8,10 @@ var utilisateurSchema = new Schema({
     prenom: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     motDePasse: { type: String, required: true },
-    preferences: { // Pour les clients
+    preferences: [{ // Pour les clients
         servicePrefere: { type: mongoose.Schema.Types.ObjectId, ref: 'service' },
         employePrefere: { type: mongoose.Schema.Types.ObjectId, ref: 'utilisateur' }
-    },
+    }],
     horairestravail: [{ type: mongoose.Schema.Types.ObjectId, ref: 'horairetravail' }], // Pour les employés
     services: [{ type: mongoose.Schema.Types.ObjectId, ref: 'service' }], // Pour les employés
     // ... d'autres champs pour les notifications, rappels, etc.
