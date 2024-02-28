@@ -7,11 +7,11 @@ var horairetravailModel = require('../src/model/horairetravail');
 var rendezvousModel = require('../src/model/rendezVous');
 var depenseModel = require('../src/model/depense');
 const nodemailer = require('nodemailer');
+const cron = require('node-cron');
 
 /*----------Login de l'utilisateur----------*/
 router.post('/login', async (req, res) => {
     const { email, motDePasse } = req.body;
-    console.log(req.body);
     try {
         const utilisateur = await utilisateurModel.findOne({ email, motDePasse })
             .populate('preferences.servicePrefere')
@@ -52,13 +52,19 @@ router.post('/nouveauEmploye', async (req, res) => {
     if (!req.body.profil) {
         req.body.profil = 1;
     }
+    const lundi = await horairetravailModel.findOne({ "jourSemaine": 1 });
+    const mardi = await horairetravailModel.findOne({ "jourSemaine": 2 });
+    const mercredi = await horairetravailModel.findOne({ "jourSemaine": 3 });
+    const jeudi = await horairetravailModel.findOne({ "jourSemaine": 4 });
+    const vendredi = await horairetravailModel.findOne({ "jourSemaine": 5 });
+    const samedi = await horairetravailModel.findOne({ "jourSemaine": 6 });
     const horairesTravailParDefaut = [
-        '65cf115cb17132c3f3e38698',
-        '65cf1161b17132c3f3e3869a',
-        '65cf1166b17132c3f3e3869c',
-        '65cf116ab17132c3f3e3869e',
-        '65cf116eb17132c3f3e386a0',
-        '65cf117db17132c3f3e386a2'
+        lundi._id,
+        mardi._id,
+        mercredi._id,
+        jeudi._id,
+        vendredi._id,
+        samedi._id
     ];
     try {
         const utilisateur = new utilisateurModel(req.body);
@@ -151,7 +157,6 @@ router.put('/modifyEmploye/:id', async (req, res) => {
         await utilisateur.save();
         return res.status(200).json({ utilisateur });
     } catch (error) {
-        console.error("Erreur lors de la modification de l'utilisateur :", error);
         return res.status(500).json({ message: "Erreur serveur lors de la modification de l'utilisateur" });
     }
 });
@@ -181,6 +186,17 @@ router.post('/service', async (req, res) => {
 router.get('/services', async (req, res) => {
     try {
         const services = await serviceModel.find({});
+        res.status(200).send(services);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/services/:nom', async (req, res) => { // Recherche service
+    try {
+        const services = await serviceModel.find({
+            "nom": { $regex: new RegExp(req.params.nom, 'i') }
+        });
         res.status(200).send(services);
     } catch (error) {
         res.status(500).send(error);
@@ -332,7 +348,7 @@ router.get('/rendezvous', async (req, res) => {
 //rdv par employe
 router.get('/rendezvous/employe/:employeId', async (req, res) => {
     try {
-        const rendezvousListparEmploye = await rendezvousModel.find({ 
+        const rendezvousListparEmploye = await rendezvousModel.find({
             employe: req.params.employeId,
             etat: 0
         })
@@ -426,7 +442,7 @@ router.post('/statistiques', async (req, res) => {
         const dateDebut = new Date(req.body.dateDebut);
         const dateFin = new Date(req.body.dateFin);
         const rendezvous = await rendezvousModel.find({ date: { $gte: dateDebut, $lte: dateFin } }).populate('service');
-        const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calculer le nombre de jours dans la période
+        const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calcul du nombre de jours dans la période
         /*----------Temps-moyen-de-travail-pour-chaque-employé----------*/
         const tempsMoyenDeTravail = [];
         const employes = await utilisateurModel.find({ profil: 1 });
@@ -439,7 +455,7 @@ router.post('/statistiques', async (req, res) => {
             tempsMoyenDeTravail.push(
                 {
                     "employe": employe,
-                    "moyenne": rendezvous.length > 0 ? total / rendezvous.length : 0,
+                    "moyenne": rendezvous.length > 0 ? total / nombreDeJours : 0, // Heure par jour
                 }
             );
         }
@@ -461,17 +477,18 @@ router.post('/statistiques', async (req, res) => {
             chiffreAffairesParMois[moisRdv] += rdv.service.prix; // Ajouter le chiffre d'affaires du service au mois correspondant
         }
         const chiffreAffaireJournalier = chiffreAffairesTotal / nombreDeJours; // Calcul du chiffre d'affaires moyen par jour
-        const chiffreAffaireMensuel = chiffreAffairesTotal / nombreDeMois; // Calcul du chiffre d'affaires moyen par mois
+        const chiffreAffaireMensuel = nombreDeMois === 0 ? chiffreAffairesTotal : chiffreAffairesTotal / nombreDeMois; // Calcul du chiffre d'affaires moyen par mois
         /*----------Le-nombre-de-réservation-----------*/
         const nombreDeReservationJournalier = rendezvous.length / nombreDeJours; // Calcul du nombre de réservation moyen par jour
-        const nombreDeReservationMensuel = rendezvous.length / nombreDeMois; // Calcul du nombre de réservation moyen par mois
+        const nombreDeReservationMensuel = nombreDeMois === 0 ? rendezvous.length : rendezvous.length / nombreDeMois; // Calcul du nombre de réservation moyen par mois
         /*----------Bénéfice-par-mois----------*/
         let depensesTotal = 0;
         const depenses = await depenseModel.find({});
         for (const depense of depenses) {
             depensesTotal += depense.montant;
         }
-        const beneficeMensuel = chiffreAffaireMensuel - (commissionTotal / nombreDeMois) - depensesTotal;
+        const commissionTotalMensuel = nombreDeMois === 0 ? commissionTotal : commissionTotal / nombreDeMois;
+        const beneficeMensuel = chiffreAffaireMensuel - commissionTotalMensuel - depensesTotal;
         /*----------Envoi-des-données----------*/
         res.status(200).send({
             "status": true,
@@ -553,7 +570,6 @@ router.post('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
         const utilisateur = await utilisateurModel.findById(utilisateurId);
         utilisateur.horairestravail.push(horaireTravailDetails);
         await utilisateur.save();
-        console.log(horaireTravailDetails);
         res.status(201).json({ message: "HoraireTravail ajouté à la liste de l'utilisateur." });
     } catch (error) {
         res.status(500).json({ message: error.message });
@@ -576,7 +592,7 @@ let transporter = nodemailer.createTransport({
 
 
 /*----------Rappel-des-rendez-vous----------*/
-router.get('/rappelRendezvous', async (req, res) => {
+cron.schedule('*/5 * * * *', async () => { // Schedule the task to run every 5 minutes
     try {
         const dateNow = new Date();
         const rendezvousActifs = await rendezvousModel.find({ "rappel": false }).populate('client').populate('service').populate('employe');
@@ -602,9 +618,8 @@ router.get('/rappelRendezvous', async (req, res) => {
                 );
             }
         }
-        res.status(200).send({ "status": true });
     } catch (error) {
-        res.status(500).send(error);
+        console.error('Error in cron job:', error);
     }
 });
 /*----------Rappel-des-rendez-vous----------*/
