@@ -8,6 +8,8 @@ var rendezvousModel = require('../src/model/rendezVous');
 var depenseModel = require('../src/model/depense');
 const nodemailer = require('nodemailer');
 
+/***********[MANGATIANA]***********/
+
 /*----------Login de l'utilisateur----------*/
 router.post('/login', async (req, res) => {
     const { email, motDePasse } = req.body;
@@ -45,6 +47,116 @@ router.post('/nouveauClient', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+/*----------Gestion du personnel----------*/
+router.post('/nouveauEmploye', async (req, res) => {
+    if (!req.body.profil) {
+        req.body.profil = 1;
+    }
+    const horairesTravailParDefaut = [
+        '65cf115cb17132c3f3e38698',
+        '65cf1161b17132c3f3e3869a',
+        '65cf1166b17132c3f3e3869c',
+        '65cf116ab17132c3f3e3869e',
+        '65cf116eb17132c3f3e386a0',
+        '65cf117db17132c3f3e386a2'
+    ];
+    try {
+        const utilisateur = new utilisateurModel(req.body);
+        utilisateur.horairestravail = horairesTravailParDefaut;
+        await utilisateur.save();
+        res.status(201).send({
+            "status": true,
+            "message": "Employe ajouté",
+            utilisateur
+        });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/listeEmploye', async (req, res) => {
+    try {
+        const utilisateurs = await utilisateurModel.find({ profil: 1 });
+        res.status(200).send(utilisateurs);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/utilisateurs/employes', async (req, res) => {
+    try {
+        const utilisateurs = await utilisateurModel.find({
+            "profil": 1 // [1] Employé
+        });
+        res.status(200).send(utilisateurs);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/utilisateurs/:_id', async (req, res) => {
+    try {
+        const _id = req.params._id;
+        const utilisateur = await utilisateurModel.findById(_id);
+        return !utilisateur ? res.status(404).send() : res.status(200).send(utilisateur);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.put('/utilisateurs/:_id', async (req, res) => {
+    try {
+        const _id = req.params._id;
+        const body = req.body;
+        const utilisateur = await utilisateurModel.findByIdAndUpdate(_id, body, { new: true });
+        return !utilisateur ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Utilisateur modifié" });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.delete('/utilisateurs/:_id', async (req, res) => {
+    try {
+        const _id = req.params._id;
+        const utilisateur = await utilisateurModel.findByIdAndDelete(_id);
+        return !utilisateur ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Utilisateur supprimé" });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.put('/modifyEmploye/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nom, prenom, email, motDePasse, services } = req.body;
+    try {
+        const utilisateur = await utilisateurModel.findById(id);
+        if (!utilisateur) {
+            return res.status(404).json({ message: "Utilisateur non trouvé" });
+        }
+        if (nom) {
+            utilisateur.nom = nom;
+        }
+        if (prenom) {
+            utilisateur.prenom = prenom;
+        }
+        if (email) {
+            utilisateur.email = email;
+        }
+        if (motDePasse) {
+            utilisateur.motDePasse = motDePasse;
+        }
+        if (services) {
+            utilisateur.services = services;
+        }
+        await utilisateur.save();
+        return res.status(200).json({ utilisateur });
+    } catch (error) {
+        console.error("Erreur lors de la modification de l'utilisateur :", error);
+        return res.status(500).json({ message: "Erreur serveur lors de la modification de l'utilisateur" });
+    }
+});
+/*----------Gestion-du-personnel----------*/
 
 
 /*----------Gestion du personnel----------*/
@@ -157,68 +269,105 @@ router.put('/modifyEmploye/:id', async (req, res) => {
 });
 /*----------Gestion-du-personnel----------*/
 
-/*----------Gestion-des-services [BASE]----------*/
-router.post('/service', async (req, res) => {
-    const { nom, prix, duree, commission, image } = req.body;
-    const service = new serviceModel({
-        nom,
-        prix,
-        duree,
-        commission,
-        image: Buffer.from(image, 'base64')
-    });
+
+/*----------Liste des rendez-vous----------*/
+router.get('/rendezvous', async (req, res) => {
     try {
-        await service.save();
-        res.status(201).send({
-            "status": true,
-            "message": "Service ajouté",
-        });
+        const rendezvousList = await rendezvousModel.find()
+            .populate('client')
+            .populate('service')
+            .populate('employe')
+            .exec();
+        res.status(200).send(rendezvousList);
     } catch (error) {
         res.status(500).send(error);
     }
 });
 
-router.get('/services', async (req, res) => {
+//rdv par employe
+router.get('/rendezvous/employe/:employeId', async (req, res) => {
     try {
-        const services = await serviceModel.find({});
-        res.status(200).send(services);
+        const rendezvousListparEmploye = await rendezvousModel.find({
+            employe: req.params.employeId,
+            etat: 0
+        })
+            .populate('client')
+            .populate('service')
+            .exec();
+        res.status(200).json(rendezvousListparEmploye);
     } catch (error) {
-        res.status(500).send(error);
+        res.status(500).json({ message: error.message });
     }
 });
 
-router.get('/services/:_id', async (req, res) => {
+router.get('/rendezvous/client/:clientId', async (req, res) => {
     try {
-        const _id = req.params._id;
-        const service = await serviceModel.findById(_id);
-        return !service ? res.status(404).send() : res.status(200).send(service);
+        const rendezvousListparClient = await rendezvousModel.find({ client: req.params.clientId })
+            .populate('employe')
+            .populate('service')
+            .exec();
+        res.status(200).json(rendezvousListparClient);
     } catch (error) {
-        res.status(500).send(error);
+        res.status(500).json({ message: error.message });
     }
 });
 
-router.put('/services/:_id', async (req, res) => {
+router.put('/effectuerendezvous/:id', async (req, res) => {
+    const rendezvousId = req.params.id;
     try {
-        const _id = req.params._id;
-        const body = req.body;
-        const service = await serviceModel.findByIdAndUpdate(_id, body, { new: true });
-        return !service ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Service modifié" });
+        const rendezvous = await rendezvousModel.findByIdAndUpdate(rendezvousId, { etat: 1 }, { new: true });
+        if (!rendezvous) {
+            return res.status(404).json({ message: "Rendez-vous non trouvé" });
+        }
+        return res.status(200).json({ message: "État du rendez-vous mis à jour avec succès", rendezvous });
     } catch (error) {
-        res.status(500).send(error);
+        return res.status(500).json({ message: "Erreur lors de la mise à jour de l'état du rendez-vous", error: error.message });
     }
 });
 
-router.delete('/services/:_id', async (req, res) => {
+
+/*modifier horaire de travail*/
+router.get('/horaires-travail/:jourSemaine', async (req, res) => {
+    const jourSemaine = req.params.jourSemaine;
     try {
-        const _id = req.params._id;
-        const service = await serviceModel.findByIdAndDelete(_id);
-        return !service ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Service supprimé" });
+        const horairesTravail = await horairetravailModel.find({ jourSemaine });
+        res.status(200).json(horairesTravail);
     } catch (error) {
-        res.status(500).send(error);
+        res.status(500).json({ message: error.message });
     }
 });
-/*----------Gestion-des-services [BASE]----------*/
 
+router.delete('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
+    const utilisateurId = req.params.utilisateurId;
+    const horaireAchanger = req.body;
+    try {
+        await utilisateurModel.findByIdAndUpdate(utilisateurId, { $pull: { horairestravail: horaireAchanger._id } });
+        res.status(200).json({ message: "Horaire de travail supprimé avec succès." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+router.post('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
+    const utilisateurId = req.params.utilisateurId;
+    const horaireTravailDetails = req.body;
+    try {
+        const utilisateur = await utilisateurModel.findById(utilisateurId);
+        utilisateur.horairestravail.push(horaireTravailDetails);
+        await utilisateur.save();
+        console.log(horaireTravailDetails);
+        res.status(201).json({ message: "HoraireTravail ajouté à la liste de l'utilisateur." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+/***********[MANGATIANA]***********/
+
+
+
+
+/***********[RICKY]***********/
 
 /*----------Prise-de-rendez-vous----------*/
 router.post('/reservation', async (req, res) => {
@@ -315,62 +464,6 @@ router.post('/paiement', async (req, res) => {
 /*----------Paiement-en-ligne----------*/
 
 
-/*----------Liste des rendez-vous----------*/
-router.get('/rendezvous', async (req, res) => {
-    try {
-        const rendezvousList = await rendezvousModel.find()
-            .populate('client')
-            .populate('service')
-            .populate('employe')
-            .exec();
-        res.status(200).send(rendezvousList);
-    } catch (error) {
-        res.status(500).send(error);
-    }
-});
-
-//rdv par employe
-router.get('/rendezvous/employe/:employeId', async (req, res) => {
-    try {
-        const rendezvousListparEmploye = await rendezvousModel.find({ 
-            employe: req.params.employeId,
-            etat: 0
-        })
-            .populate('client')
-            .populate('service')
-            .exec();
-        res.status(200).json(rendezvousListparEmploye);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.get('/rendezvous/client/:clientId', async (req, res) => {
-    try {
-        const rendezvousListparClient = await rendezvousModel.find({ client: req.params.clientId })
-            .populate('employe')
-            .populate('service')
-            .exec();
-        res.status(200).json(rendezvousListparClient);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.put('/effectuerendezvous/:id', async (req, res) => {
-    const rendezvousId = req.params.id;
-    try {
-        const rendezvous = await rendezvousModel.findByIdAndUpdate(rendezvousId, { etat: 1 }, { new: true });
-        if (!rendezvous) {
-            return res.status(404).json({ message: "Rendez-vous non trouvé" });
-        }
-        return res.status(200).json({ message: "État du rendez-vous mis à jour avec succès", rendezvous });
-    } catch (error) {
-        return res.status(500).json({ message: "Erreur lors de la mise à jour de l'état du rendez-vous", error: error.message });
-    }
-});
-
-
 /*----------Tâches-effectuées-et-montant-de-commission-pour-la-journée----------*/
 router.get('/taches/:employeId', async (req, res) => {
     try {
@@ -426,7 +519,7 @@ router.post('/statistiques', async (req, res) => {
         const dateDebut = new Date(req.body.dateDebut);
         const dateFin = new Date(req.body.dateFin);
         const rendezvous = await rendezvousModel.find({ date: { $gte: dateDebut, $lte: dateFin } }).populate('service');
-        const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calculer le nombre de jours dans la période
+        const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calcul du nombre de jours dans la période
         /*----------Temps-moyen-de-travail-pour-chaque-employé----------*/
         const tempsMoyenDeTravail = [];
         const employes = await utilisateurModel.find({ profil: 1 });
@@ -524,53 +617,14 @@ router.delete('/depense/:_id', async (req, res) => {
 /*----------Gestion-des-dépenses----------*/
 
 
-/*modifier horaire de travail*/
-router.get('/horaires-travail/:jourSemaine', async (req, res) => {
-    const jourSemaine = req.params.jourSemaine;
-    try {
-        const horairesTravail = await horairetravailModel.find({ jourSemaine });
-        res.status(200).json(horairesTravail);
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.delete('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
-    const utilisateurId = req.params.utilisateurId;
-    const horaireAchanger = req.body;
-    try {
-        await utilisateurModel.findByIdAndUpdate(utilisateurId, { $pull: { horairestravail: horaireAchanger._id } });
-        res.status(200).json({ message: "Horaire de travail supprimé avec succès." });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-router.post('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
-    const utilisateurId = req.params.utilisateurId;
-    const horaireTravailDetails = req.body;
-    try {
-        const utilisateur = await utilisateurModel.findById(utilisateurId);
-        utilisateur.horairestravail.push(horaireTravailDetails);
-        await utilisateur.save();
-        console.log(horaireTravailDetails);
-        res.status(201).json({ message: "HoraireTravail ajouté à la liste de l'utilisateur." });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-});
-
-
-//Send Mail
-// Configurer le transporteur (SMTP)
 let transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'mangatiana7@gmail.com', //mailenvoyeur
-        pass: 'kzkd wmnk rsha ishv' //motdepasse genere depuis identifiant à deux facteurs dans gmail
+        user: 'mangatiana7@gmail.com',
+        pass: 'kzkd wmnk rsha ishv'
     },
     tls: {
-        rejectUnauthorized: false // Ignorer les erreurs de certificat
+        rejectUnauthorized: false
     }
 });
 
@@ -644,5 +698,6 @@ router.delete('/horaire/:_id', async (req, res) => {
 });
 /*----------Gestion-des-horaires-de-travail----------*/
 
+/***********[RICKY]***********/
 
 module.exports = router;
