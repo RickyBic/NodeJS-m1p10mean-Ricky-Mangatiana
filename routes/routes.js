@@ -165,7 +165,6 @@ router.post('/service', async (req, res) => {
         prix,
         duree,
         commission,
-        // image: image
         image: Buffer.from(image, 'base64')
     });
     try {
@@ -371,38 +370,6 @@ router.put('/effectuerendezvous/:id', async (req, res) => {
     }
 });
 
-//Send Mail
-// Configurer le transporteur (SMTP)
-let transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: '@gmail.com', //mailenvoyeur
-        pass: 'kklf ybyr fptc ivna' //motdepasse genere depuis identifiant à deux facteurs dans gmail
-    },
-    tls: {
-        rejectUnauthorized: false // Ignorer les erreurs de certificat
-    }
-});
-
-router.post('/envoyer-email', (req, res) => {
-    const { destinataire, sujet, contenu } = req.body;
-    let mailOptions = {
-        from: '@gmail.com', //mailenvoyeur
-        to: destinataire,
-        subject: sujet,
-        text: contenu
-    };
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            console.log('Erreur lors de l\'envoi du courriel:', error);
-            res.status(500).json({ message: 'Erreur lors de l\'envoi du courriel' });
-        } else {
-            console.log('Courriel envoyé avec succès:', info.response);
-            res.json({ message: 'Courriel envoyé avec succès' });
-        }
-    });
-});
-
 
 /*----------Tâches-effectuées-et-montant-de-commission-pour-la-journée----------*/
 router.get('/taches/:employeId', async (req, res) => {
@@ -493,11 +460,11 @@ router.post('/statistiques', async (req, res) => {
             }
             chiffreAffairesParMois[moisRdv] += rdv.service.prix; // Ajouter le chiffre d'affaires du service au mois correspondant
         }
-        const chiffreAffaireJournalier = chiffreAffairesTotal / nombreDeJours; // Calculer le chiffre d'affaires moyen par jour
-        const chiffreAffaireMensuel = chiffreAffairesTotal / nombreDeMois; // Calculer le chiffre d'affaires moyen par mois
+        const chiffreAffaireJournalier = chiffreAffairesTotal / nombreDeJours; // Calcul du chiffre d'affaires moyen par jour
+        const chiffreAffaireMensuel = chiffreAffairesTotal / nombreDeMois; // Calcul du chiffre d'affaires moyen par mois
         /*----------Le-nombre-de-réservation-----------*/
-        const nombreDeReservationJournalier = rendezvous.length / nombreDeJours; // Calculer le nombre de réservation moyen par jour
-        const nombreDeReservationMensuel = rendezvous.length / nombreDeMois; // Calculer le nombre de réservation moyen par mois
+        const nombreDeReservationJournalier = rendezvous.length / nombreDeJours; // Calcul du nombre de réservation moyen par jour
+        const nombreDeReservationMensuel = rendezvous.length / nombreDeMois; // Calcul du nombre de réservation moyen par mois
         /*----------Bénéfice-par-mois----------*/
         let depensesTotal = 0;
         const depenses = await depenseModel.find({});
@@ -556,6 +523,7 @@ router.delete('/depense/:_id', async (req, res) => {
 });
 /*----------Gestion-des-dépenses----------*/
 
+
 /*modifier horaire de travail*/
 router.get('/horaires-travail/:jourSemaine', async (req, res) => {
     const jourSemaine = req.params.jourSemaine;
@@ -591,6 +559,90 @@ router.post('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
+
+
+//Send Mail
+// Configurer le transporteur (SMTP)
+let transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'mangatiana7@gmail.com', //mailenvoyeur
+        pass: 'kzkd wmnk rsha ishv' //motdepasse genere depuis identifiant à deux facteurs dans gmail
+    },
+    tls: {
+        rejectUnauthorized: false // Ignorer les erreurs de certificat
+    }
+});
+
+
+/*----------Rappel-des-rendez-vous----------*/
+router.get('/rappelRendezvous', async (req, res) => {
+    try {
+        const dateNow = new Date();
+        const rendezvousActifs = await rendezvousModel.find({ "rappel": false }).populate('client').populate('service').populate('employe');
+        for (const rdv of rendezvousActifs) {
+            const dateRappel = new Date(rdv.date.getTime() - 4 * 60 * 60 * 1000); // Subtract 4 hours from the appointment time
+            if (dateNow >= dateRappel && dateNow < rdv.date) {
+                const day = rdv.date.getDate().toString().padStart(2, '0'); // Add leading zero if needed
+                const month = (rdv.date.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-indexed
+                const year = rdv.date.getFullYear();
+                const hour = rdv.date.getHours().toString().padStart(2, '0');
+                const minutes = rdv.date.getMinutes().toString().padStart(2, '0');
+                const message = "Bonjour " + rdv.client.nom + " " + rdv.client.prenom + ", n'oubliez pas votre rendez-vous du " + `${day}/${month}/${year}` + " à " + `${hour}:${minutes}` + " pour le service " + rdv.service.nom.toLowerCase() + " avec " + rdv.employe.nom + " " + rdv.employe.prenom + ". Merci!";
+                transporter.sendMail({
+                    from: 'mangatiana7@gmail.com',
+                    to: rdv.client.email,
+                    subject: "Rappel de rendez-vous chez Splendeur",
+                    text: message
+                });
+                await rendezvousModel.findOneAndUpdate(
+                    { _id: rdv._id },
+                    { $set: { rappel: true } },
+                    { new: true }
+                );
+            }
+        }
+        res.status(200).send({ "status": true });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Rappel-des-rendez-vous----------*/
+
+
+/*----------Gestion-des-horaires-de-travail----------*/
+router.post('/horaire', async (req, res) => {
+    const horaire = new horairetravailModel(req.body);
+    try {
+        await horaire.save();
+        res.status(201).send({
+            "status": true,
+            "message": "Horaire ajouté"
+        });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.get('/horaires', async (req, res) => {
+    try {
+        const horaires = await horairetravailModel.find({});
+        res.status(200).send(horaires);
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+
+router.delete('/horaire/:_id', async (req, res) => {
+    try {
+        const _id = req.params._id;
+        const horaire = await horairetravailModel.findByIdAndDelete(_id);
+        return !horaire ? res.status(404).send() : res.status(200).send({ "status": true, "message": "Horaire supprimé" });
+    } catch (error) {
+        res.status(500).send(error);
+    }
+});
+/*----------Gestion-des-horaires-de-travail----------*/
 
 
 module.exports = router;
