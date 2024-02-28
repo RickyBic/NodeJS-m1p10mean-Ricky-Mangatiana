@@ -52,8 +52,17 @@ router.post('/nouveauEmploye', async (req, res) => {
     if (!req.body.profil) {
         req.body.profil = 1;
     }
-    const utilisateur = new utilisateurModel(req.body);
+    const horairesTravailParDefaut = [
+        '65cf115cb17132c3f3e38698',
+        '65cf1161b17132c3f3e3869a',
+        '65cf1166b17132c3f3e3869c',
+        '65cf116ab17132c3f3e3869e',
+        '65cf116eb17132c3f3e386a0',
+        '65cf117db17132c3f3e386a2'
+    ];
     try {
+        const utilisateur = new utilisateurModel(req.body);
+        utilisateur.horairestravail = horairesTravailParDefaut;
         await utilisateur.save();
         res.status(201).send({
             "status": true,
@@ -147,7 +156,6 @@ router.put('/modifyEmploye/:id', async (req, res) => {
     }
 });
 /*----------Gestion-du-personnel----------*/
-
 
 /*----------Gestion-des-services [BASE]----------*/
 router.post('/service', async (req, res) => {
@@ -324,7 +332,10 @@ router.get('/rendezvous', async (req, res) => {
 //rdv par employe
 router.get('/rendezvous/employe/:employeId', async (req, res) => {
     try {
-        const rendezvousListparEmploye = await rendezvousModel.find({ employe: req.params.employeId })
+        const rendezvousListparEmploye = await rendezvousModel.find({ 
+            employe: req.params.employeId,
+            etat: 0
+        })
             .populate('client')
             .populate('service')
             .exec();
@@ -343,6 +354,19 @@ router.get('/rendezvous/client/:clientId', async (req, res) => {
         res.status(200).json(rendezvousListparClient);
     } catch (error) {
         res.status(500).json({ message: error.message });
+    }
+});
+
+router.put('/effectuerendezvous/:id', async (req, res) => {
+    const rendezvousId = req.params.id;
+    try {
+        const rendezvous = await rendezvousModel.findByIdAndUpdate(rendezvousId, { etat: 1 }, { new: true });
+        if (!rendezvous) {
+            return res.status(404).json({ message: "Rendez-vous non trouvé" });
+        }
+        return res.status(200).json({ message: "État du rendez-vous mis à jour avec succès", rendezvous });
+    } catch (error) {
+        return res.status(500).json({ message: "Erreur lors de la mise à jour de l'état du rendez-vous", error: error.message });
     }
 });
 
@@ -500,6 +524,43 @@ router.delete('/depense/:_id', async (req, res) => {
 /*----------Gestion-des-dépenses----------*/
 
 
+/*modifier horaire de travail*/
+router.get('/horaires-travail/:jourSemaine', async (req, res) => {
+    const jourSemaine = req.params.jourSemaine;
+    try {
+        const horairesTravail = await horairetravailModel.find({ jourSemaine });
+        res.status(200).json(horairesTravail);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+router.delete('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
+    const utilisateurId = req.params.utilisateurId;
+    const horaireAchanger = req.body;
+    try {
+        await utilisateurModel.findByIdAndUpdate(utilisateurId, { $pull: { horairestravail: horaireAchanger._id } });
+        res.status(200).json({ message: "Horaire de travail supprimé avec succès." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+router.post('/utilisateur/:utilisateurId/horairetravail', async (req, res) => {
+    const utilisateurId = req.params.utilisateurId;
+    const horaireTravailDetails = req.body;
+    try {
+        const utilisateur = await utilisateurModel.findById(utilisateurId);
+        utilisateur.horairestravail.push(horaireTravailDetails);
+        await utilisateur.save();
+        console.log(horaireTravailDetails);
+        res.status(201).json({ message: "HoraireTravail ajouté à la liste de l'utilisateur." });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
 //Send Mail
 // Configurer le transporteur (SMTP)
 let transporter = nodemailer.createTransport({
@@ -582,5 +643,6 @@ router.delete('/horaire/:_id', async (req, res) => {
     }
 });
 /*----------Gestion-des-horaires-de-travail----------*/
+
 
 module.exports = router;
