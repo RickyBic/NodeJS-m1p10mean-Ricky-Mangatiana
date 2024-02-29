@@ -12,16 +12,20 @@ const cron = require('node-cron');
 
 
 /*----------Date-du-serveur----------*/
-router.get('/server-date', async (req, res) => {
-    const date = new Date();
+router.get('/test', async (req, res) => {
+    /*const date = new Date();
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
     const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');*/
+    const rendezvous = await rendezvousModel.find({});
+
+
     res.status(200).send({
-        "date": `${day}/${month}/${year} ${hours}:${minutes}`
-    });
+        "date": rendezvous[0].date.getHours() + ":" + rendezvous[0].date.getMinutes()
+    })
+
 });
 
 
