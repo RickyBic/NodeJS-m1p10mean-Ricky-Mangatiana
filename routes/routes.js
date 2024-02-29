@@ -1,7 +1,5 @@
 const express = require("express");
 const router = express.Router();
-const moment = require('moment-timezone');
-moment.tz.setDefault('Indian/Antananarivo');
 var utilisateurModel = require('../src/model/utilisateur');
 var serviceModel = require('../src/model/service');
 var horairetravailModel = require('../src/model/horairetravail');
@@ -9,21 +7,6 @@ var rendezvousModel = require('../src/model/rendezvous');
 var depenseModel = require('../src/model/depense');
 const nodemailer = require('nodemailer');
 const cron = require('node-cron');
-
-
-/*----------Date-du-serveur----------*/
-router.get('/server-date', async (req, res) => {
-    const date = new Date();
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    res.status(200).send({
-        "date": `${day}/${month}/${year} ${hours}:${minutes}`
-    });
-});
-
 
 /*----------Login de l'utilisateur----------*/
 router.post('/login', async (req, res) => {
@@ -177,6 +160,7 @@ router.put('/modifyEmploye/:id', async (req, res) => {
     }
 });
 /*----------Gestion-du-personnel----------*/
+
 
 /*----------Gestion-des-services [BASE]----------*/
 router.post('/service', async (req, res) => {
@@ -359,6 +343,7 @@ router.get('/rendezvous', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
 
 //rdv par employe
 router.get('/rendezvous/employe/:employeId', async (req, res) => {
@@ -673,6 +658,5 @@ router.delete('/horaire/:_id', async (req, res) => {
     }
 });
 /*----------Gestion-des-horaires-de-travail----------*/
-
 
 module.exports = router;
