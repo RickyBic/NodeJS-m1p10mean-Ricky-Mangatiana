@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-const moment = require('moment');
+const moment = require('moment-timezone');
+moment.tz.setDefault('Africa/Antananarivo');
 var utilisateurModel = require('../src/model/utilisateur');
 var serviceModel = require('../src/model/service');
 var horairetravailModel = require('../src/model/horairetravail');
@@ -239,7 +240,7 @@ router.delete('/services/:_id', async (req, res) => {
 /*----------Prise-de-rendez-vous----------*/
 router.post('/reservation', async (req, res) => {
     const services = req.body.services;
-    const dateRdv = new Date(req.body.dateHeure);
+    const dateRdv = moment.tz(req.body.dateHeure, 'Africa/Antananarivo').toDate();
     const jourSemaine = dateRdv.getDay();
     try {
         /*----------Vérification-de-la-réservation----------*/
@@ -258,9 +259,9 @@ router.post('/reservation', async (req, res) => {
                     });
                 }
                 /*----------Contrainte-rendez-vous-existants----------*/
-                const desiredDate = new Date(req.body.dateHeure.split('T')[0]);
+                const desiredDate = moment.tz(req.body.dateHeure.split('T')[0], 'Africa/Antananarivo').toDate();
                 desiredDate.setHours(0, 0, 0, 0);
-                const nextDay = new Date(desiredDate);
+                const nextDay = desiredDate.clone();
                 nextDay.setDate(nextDay.getDate() + 1);
                 nextDay.setHours(0, 0, 0, 0);
                 const rendezvousEmploye = await rendezvousModel.find({
@@ -271,7 +272,7 @@ router.post('/reservation', async (req, res) => {
                     }
                 }).populate('service');
                 for (const rendezvous of rendezvousEmploye) {
-                    const date = moment.utc(rendezvous.date).local().toDate();
+                    const date = moment.tz(rendezvous.date, 'UTC').tz('Africa/Antananarivo').toDate();
                     const heureDebut = date.getHours() + (date.getMinutes() / 60);
                     const heureFin = heureDebut + (rendezvous.service.duree / 60);
                     if (heureRdvDebut < heureFin && heureRdvFin > heureDebut) {
@@ -306,7 +307,7 @@ router.post('/reservation', async (req, res) => {
 router.post('/paiement', async (req, res) => {
     const client = req.body.client;
     const services = req.body.services;
-    const dateDebut = new Date(req.body.dateHeure);
+    const dateDebut = moment.tz(req.body.dateHeure, 'Africa/Antananarivo').toDate();
     try {
         /*----------Création-des-rendez-vous----------*/
         for (const service of services) {
@@ -390,9 +391,9 @@ router.put('/effectuerendezvous/:id', async (req, res) => {
 /*----------Tâches-effectuées-et-montant-de-commission-pour-la-journée----------*/
 router.get('/taches/:employeId', async (req, res) => {
     try {
-        const desiredDate = new Date();
+        const desiredDate = moment.tz(new Date(), 'Africa/Antananarivo');
         desiredDate.setHours(0, 0, 0, 0);
-        const nextDay = new Date(desiredDate);
+        const nextDay = desiredDate.clone();
         nextDay.setDate(nextDay.getDate() + 1);
         nextDay.setHours(0, 0, 0, 0);
         const taches = await rendezvousModel.find({ // [rendezvous] Tâches effectuées par l'employé 
@@ -439,8 +440,8 @@ router.put('/preferences/:clientId', async (req, res) => {
 /*----------Statistiques----------*/
 router.post('/statistiques', async (req, res) => {
     try {
-        const dateDebut = new Date(req.body.dateDebut);
-        const dateFin = new Date(req.body.dateFin);
+        const dateDebut = moment.tz(req.body.dateDebut, 'Africa/Antananarivo').toDate();
+        const dateFin = moment.tz(req.body.dateFin, 'Africa/Antananarivo').toDate();
         const rendezvous = await rendezvousModel.find({ date: { $gte: dateDebut, $lte: dateFin } }).populate('service');
         const nombreDeJours = (dateFin - dateDebut) / (1000 * 60 * 60 * 24); // Calcul du nombre de jours dans la période
         /*----------Temps-moyen-de-travail-pour-chaque-employé----------*/
@@ -469,7 +470,8 @@ router.post('/statistiques', async (req, res) => {
         let nombreDeMois = 0;
         const chiffreAffairesParMois = {}; // Initialiser un objet pour stocker le chiffre d'affaires par mois [Pas nécessaire]
         for (const rdv of rendezvous) {
-            const moisRdv = rdv.date.getMonth() + 1; // Les mois sont indexés à partir de 0, donc nous ajoutons 1
+            const dateRdv = moment.tz(rdv.date, 'UTC').tz('Africa/Antananarivo').toDate();
+            const moisRdv = dateRdv.getMonth() + 1; // Les mois sont indexés à partir de 0, donc nous ajoutons 1
             if (!chiffreAffairesParMois[moisRdv]) {
                 chiffreAffairesParMois[moisRdv] = 0;
                 nombreDeMois++; // [Nécessaire]
@@ -583,7 +585,7 @@ let transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: 'mangatiana7@gmail.com', //mailenvoyeur
-        pass: 'kzkd wmnk rsha ishv' //motdepasse genere depuis identifiant à deux facteurs dans gmail
+        pass: 'fqeu rabr ztir boqz' //motdepasse genere depuis identifiant à deux facteurs dans gmail
     },
     tls: {
         rejectUnauthorized: false // Ignorer les erreurs de certificat
@@ -594,16 +596,17 @@ let transporter = nodemailer.createTransport({
 /*----------Rappel-des-rendez-vous----------*/
 cron.schedule('*/5 * * * *', async () => { // Schedule the task to run every 5 minutes
     try {
-        const dateNow = new Date();
+        const dateNow = moment.tz(new Date(), 'Africa/Antananarivo');
         const rendezvousActifs = await rendezvousModel.find({ "rappel": false }).populate('client').populate('service').populate('employe');
         for (const rdv of rendezvousActifs) {
-            const dateRappel = new Date(rdv.date.getTime() - 4 * 60 * 60 * 1000); // Subtract 4 hours from the appointment time
-            if (dateNow >= dateRappel && dateNow < rdv.date) {
-                const day = rdv.date.getDate().toString().padStart(2, '0'); // Add leading zero if needed
-                const month = (rdv.date.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-indexed
-                const year = rdv.date.getFullYear();
-                const hour = rdv.date.getHours().toString().padStart(2, '0');
-                const minutes = rdv.date.getMinutes().toString().padStart(2, '0');
+            const dateRdv = moment.tz(rdv.date, 'UTC').tz('Africa/Antananarivo').toDate();
+            const dateRappel = moment.tz(dateRdv, 'Africa/Antananarivo').subtract(4, 'hours').toDate(); // Subtract 4 hours from the appointment time
+            if (dateNow >= dateRappel && dateNow < dateRdv) {
+                const day = dateRdv.getDate().toString().padStart(2, '0'); // Add leading zero if needed
+                const month = (dateRdv.getMonth() + 1).toString().padStart(2, '0'); // Month is zero-indexed
+                const year = dateRdv.getFullYear();
+                const hour = dateRdv.getHours().toString().padStart(2, '0');
+                const minutes = dateRdv.getMinutes().toString().padStart(2, '0');
                 const message = "Bonjour " + rdv.client.nom + " " + rdv.client.prenom + ", n'oubliez pas votre rendez-vous du " + `${day}/${month}/${year}` + " à " + `${hour}:${minutes}` + " pour le service " + rdv.service.nom.toLowerCase() + " avec " + rdv.employe.nom + " " + rdv.employe.prenom + ". Merci!";
                 transporter.sendMail({
                     from: 'mangatiana7@gmail.com',
