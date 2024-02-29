@@ -583,7 +583,7 @@ let transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
         user: 'mangatiana7@gmail.com', //mailenvoyeur
-        pass: 'kzkd wmnk rsha ishv' //motdepasse genere depuis identifiant à deux facteurs dans gmail
+        pass: 'fqeu rabr ztir boqz' //motdepasse genere depuis identifiant à deux facteurs dans gmail
     },
     tls: {
         rejectUnauthorized: false // Ignorer les erreurs de certificat
